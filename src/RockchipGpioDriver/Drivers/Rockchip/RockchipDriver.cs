@@ -26,20 +26,12 @@ namespace Iot.Device.Gpio.Drivers
         /// <summary>
         /// Gpio register addresses.
         /// </summary>
-        protected virtual int[] GpioRegisterAddresses { get; }
-
-        /// <summary>
-        /// General register file (GRF) address.
-        /// </summary>
-        /// <remarks>
-        /// GPIO PAD pulldown and pullup control.
-        /// </remarks>
-        protected virtual int GeneralRegisterFileAddress { get; }
+        protected virtual uint[] GpioRegisterAddresses { get; }
 
         private const string GpioMemoryFilePath = "/dev/mem";
-        private List<IntPtr> _gpioPointers = new List<IntPtr>();
-        private IntPtr _grfPointers;
-        private readonly IDictionary<int, PinState> _pinModes = new Dictionary<int, PinState>();
+        private UIntPtr[] _gpioPointers = Array.Empty<UIntPtr>();
+        private IDictionary<int, PinState> _pinModes = new Dictionary<int, PinState>();
+        private readonly uint _mapMask = (uint)(Environment.SystemPageSize - 1);
         private static readonly object s_initializationLock = new object();
         private static readonly object s_sysFsInitializationLock = new object();
 
@@ -48,17 +40,17 @@ namespace Iot.Device.Gpio.Drivers
         /// </summary>
         protected RockchipDriver()
         {
+            Initialize();
         }
 
         /// <summary>
         /// Initializes a new instance of the <see cref="RockchipDriver"/>.
         /// </summary>
         /// <param name="gpioRegisterAddresses">Gpio register addresses (This can be find in the corresponding SoC datasheet).</param>
-        /// <param name="generalRegisterFileAddress">General register file (GRF) address (This can be find in the corresponding SoC datasheet).</param>
-        public RockchipDriver(int[] gpioRegisterAddresses, int generalRegisterFileAddress)
+        public RockchipDriver(uint[] gpioRegisterAddresses)
         {
             GpioRegisterAddresses = gpioRegisterAddresses;
-            GeneralRegisterFileAddress = generalRegisterFileAddress;
+            Initialize();
         }
 
         /// <summary>
@@ -79,7 +71,6 @@ namespace Iot.Device.Gpio.Drivers
         /// <param name="pinNumber">The pin number in the driver's logical numbering scheme.</param>
         protected override void OpenPin(int pinNumber)
         {
-            Initialize();
             SetPinMode(pinNumber, PinMode.Input);
         }
 
@@ -96,10 +87,18 @@ namespace Iot.Device.Gpio.Drivers
                     base.ClosePin(pinNumber);
                 }
 
-                if (_pinModes[pinNumber].CurrentPinMode == PinMode.Output)
+                switch (_pinModes[pinNumber].CurrentPinMode)
                 {
-                    Write(pinNumber, PinValue.Low);
-                    SetPinMode(pinNumber, PinMode.Input);
+                    case PinMode.InputPullDown:
+                    case PinMode.InputPullUp:
+                        SetPinMode(pinNumber, PinMode.Input);
+                        break;
+                    case PinMode.Output:
+                        Write(pinNumber, PinValue.Low);
+                        SetPinMode(pinNumber, PinMode.Input);
+                        break;
+                    default:
+                        break;
                 }
 
                 _pinModes.Remove(pinNumber);
@@ -131,7 +130,7 @@ namespace Iot.Device.Gpio.Drivers
             uint* dataPointer;
 
             // data register (GPIO_SWPORTA_DR) offset is 0x0000
-            dataAddress = GpioRegisterAddresses[unmapped.GpioNumber];
+            dataAddress = (int)(GpioRegisterAddresses[unmapped.GpioNumber] & _mapMask);
             dataPointer = (uint*)(_gpioPointers[unmapped.GpioNumber] + dataAddress);
 
             uint dataValue = *dataPointer;
@@ -161,7 +160,7 @@ namespace Iot.Device.Gpio.Drivers
             uint* dataPointer;
 
             // data register (GPIO_SWPORTA_DR) offset is 0x0000
-            dataAddress = GpioRegisterAddresses[unmapped.GpioNumber];
+            dataAddress = (int)(GpioRegisterAddresses[unmapped.GpioNumber] & _mapMask);
             dataPointer = (uint*)(_gpioPointers[unmapped.GpioNumber] + dataAddress);
             uint dataValue = *dataPointer;
 
@@ -176,6 +175,18 @@ namespace Iot.Device.Gpio.Drivers
         /// <param name="callback">Delegate that defines the structure for callbacks when a pin value changed event occurs.</param>
         protected override void AddCallbackForPinValueChangedEvent(int pinNumber, PinEventTypes eventTypes, PinChangeEventHandler callback)
         {
+            if (!_pinModes.ContainsKey(pinNumber))
+            {
+                throw new InvalidOperationException("Can not add a handler to a pin that is not open.");
+            }
+            else
+            {
+                if (_pinModes[pinNumber].CurrentPinMode == PinMode.Output)
+                {
+                    throw new InvalidOperationException("Can not add a handler to a pin that is output mode.");
+                }
+            }
+
             _pinModes[pinNumber].InUseByInterruptDriver = true;
 
             base.OpenPin(pinNumber);
@@ -189,7 +200,12 @@ namespace Iot.Device.Gpio.Drivers
         /// <param name="callback">Delegate that defines the structure for callbacks when a pin value changed event occurs.</param>
         protected override void RemoveCallbackForPinValueChangedEvent(int pinNumber, PinChangeEventHandler callback)
         {
-            _pinModes[pinNumber].InUseByInterruptDriver = true;
+            if (!_pinModes.ContainsKey(pinNumber))
+            {
+                throw new InvalidOperationException("Can not add a handler to a pin that is not open.");
+            }
+
+            _pinModes[pinNumber].InUseByInterruptDriver = false;
 
             base.OpenPin(pinNumber);
             base.RemoveCallbackForPinValueChangedEvent(pinNumber, callback);
@@ -204,6 +220,11 @@ namespace Iot.Device.Gpio.Drivers
         /// <returns>A structure that contains the result of the waiting operation.</returns>
         protected override WaitForEventResult WaitForEvent(int pinNumber, PinEventTypes eventTypes, CancellationToken cancellationToken)
         {
+            if (!_pinModes.ContainsKey(pinNumber))
+            {
+                throw new InvalidOperationException("Can not add a block execution to a pin that is not open.");
+            }
+
             _pinModes[pinNumber].InUseByInterruptDriver = true;
 
             base.OpenPin(pinNumber);
@@ -219,6 +240,11 @@ namespace Iot.Device.Gpio.Drivers
         /// <returns>A task representing the operation of getting the structure that contains the result of the waiting operation</returns>
         protected override ValueTask<WaitForEventResult> WaitForEventAsync(int pinNumber, PinEventTypes eventTypes, CancellationToken cancellationToken)
         {
+            if (!_pinModes.ContainsKey(pinNumber))
+            {
+                throw new InvalidOperationException("Can not async call to a pin that is not open.");
+            }
+
             _pinModes[pinNumber].InUseByInterruptDriver = true;
 
             base.OpenPin(pinNumber);
@@ -233,16 +259,11 @@ namespace Iot.Device.Gpio.Drivers
         /// <returns>The status if the pin supports the mode.</returns>
         protected override bool IsPinModeSupported(int pinNumber, PinMode mode)
         {
-            switch (mode)
+            return mode switch
             {
-                case PinMode.Input:
-                case PinMode.InputPullDown:
-                case PinMode.InputPullUp:
-                case PinMode.Output:
-                    return true;
-                default:
-                    return false;
-            }
+                PinMode.Input or PinMode.Output => true,
+                _ => false,
+            };
         }
 
         /// <summary>
@@ -263,25 +284,25 @@ namespace Iot.Device.Gpio.Drivers
         /// <inheritdoc/>
         protected override void Dispose(bool disposing)
         {
-            foreach (IntPtr pointer in _gpioPointers)
+            foreach (UIntPtr pointer in _gpioPointers)
             {
                 Interop.munmap(pointer, 0);
             }
-            _gpioPointers.Clear();
+            Array.Clear(_gpioPointers, 0, _gpioPointers.Length);
 
             Dispose();
         }
 
         private void Initialize()
         {
-            if (_gpioPointers.Count != 0)
+            if (_gpioPointers.Length != 0)
             {
                 return;
             }
 
             lock (s_initializationLock)
             {
-                if (_gpioPointers.Count != 0)
+                if (_gpioPointers.Length != 0)
                 {
                     return;
                 }
@@ -292,23 +313,19 @@ namespace Iot.Device.Gpio.Drivers
                     throw new IOException($"Error {Marshal.GetLastWin32Error()} initializing the Gpio driver.");
                 }
 
-                foreach (int address in GpioRegisterAddresses)
+                _gpioPointers = new UIntPtr[GpioRegisterAddresses.Length];
+
+                for (int i = 0; i < GpioRegisterAddresses.Length; i++)
                 {
-                    IntPtr map = Interop.mmap(IntPtr.Zero, Environment.SystemPageSize - 1, (MemoryMappedProtections.PROT_READ | MemoryMappedProtections.PROT_WRITE), MemoryMappedFlags.MAP_SHARED, fileDescriptor, address);
-                    if (map.ToInt64() == -1)
+                    UIntPtr map = Interop.mmap(IntPtr.Zero, Environment.SystemPageSize - 1, (MemoryMappedProtections.PROT_READ | MemoryMappedProtections.PROT_WRITE), MemoryMappedFlags.MAP_SHARED, fileDescriptor, GpioRegisterAddresses[i] & ~_mapMask);
+
+                    if (map.ToUInt64() == 0)
                     {
                         throw new IOException($"Error {Marshal.GetLastWin32Error()} initializing the Gpio driver.");
                     }
 
-                    _gpioPointers.Add(map);
+                    _gpioPointers[i] = map;
                 }
-
-                IntPtr grfMap = Interop.mmap(IntPtr.Zero, Environment.SystemPageSize - 1, (MemoryMappedProtections.PROT_READ | MemoryMappedProtections.PROT_WRITE), MemoryMappedFlags.MAP_SHARED, fileDescriptor, GeneralRegisterFileAddress);
-                if (fileDescriptor == -1)
-                {
-                    throw new IOException($"Error {Marshal.GetLastWin32Error()} initializing the Gpio driver.");
-                }
-                _grfPointers = grfMap;
 
                 Interop.close(fileDescriptor);
             }

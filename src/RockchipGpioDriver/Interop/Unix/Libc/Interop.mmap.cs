@@ -13,6 +13,9 @@ internal partial class Interop
 {
     [DllImport(LibcLibrary, SetLastError = true)]
     internal static extern IntPtr mmap(IntPtr addr, int length, MemoryMappedProtections prot, MemoryMappedFlags flags, int fd, int offset);
+
+    [DllImport(LibcLibrary, SetLastError = true)]
+    internal static extern UIntPtr mmap(IntPtr addr, int length, MemoryMappedProtections prot, MemoryMappedFlags flags, int fd, uint offset);
 }
 
 [Flags]
