@@ -324,7 +324,7 @@ namespace Iot.Device.Gpio.Drivers
 
                 for (int i = 0; i < GpioRegisterAddresses.Length; i++)
                 {
-                    UIntPtr map = Interop.mmap(IntPtr.Zero, Environment.SystemPageSize, (MemoryMappedProtections.PROT_READ | MemoryMappedProtections.PROT_WRITE), MemoryMappedFlags.MAP_SHARED, fileDescriptor, GpioRegisterAddresses[i] & ~_mapMask);
+                    UIntPtr map = Interop.mmap(IntPtr.Zero, Environment.SystemPageSize, MemoryMappedProtections.PROT_READ | MemoryMappedProtections.PROT_WRITE, MemoryMappedFlags.MAP_SHARED, fileDescriptor, GpioRegisterAddresses[i] & ~_mapMask);
 
                     if (map.ToUInt64() == 0)
                     {

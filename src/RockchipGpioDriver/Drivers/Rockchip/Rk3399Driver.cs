@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Iot.Device.Gpio.Drivers
@@ -63,6 +64,8 @@ namespace Iot.Device.Gpio.Drivers
                 modeAddress = (int)((PmuGeneralRegisterFiles + _grfOffsets[unmapped.GpioNumber * 4 + unmapped.Port]) & _mapMask);
                 modePointer = (uint*)(_pmuGrfPointer + modeAddress);
                 modeValue = *modePointer;
+                // software write enable
+                modeValue |= 0xFFFF_0000;
                 // set pull-up/pull-down: pull-up is 0b11; pull-down is 0b01; default is 0b00/0b10
                 modeValue &= (uint)~(0b11 << (unmapped.PortNumber * 2));
 
@@ -83,10 +86,11 @@ namespace Iot.Device.Gpio.Drivers
                 modeAddress = (int)((GeneralRegisterFiles + _grfOffsets[unmapped.GpioNumber * 4 + unmapped.Port]) & _mapMask);
                 modePointer = (uint*)(_grfPointer + modeAddress);
                 modeValue = *modePointer;
+                Console.WriteLine(Convert.ToString(modeValue, 16));
+                // software write enable
+                modeValue |= 0xFFFF_0000;
                 // set pull-up/pull-down: pull-up is 0b01; pull-down is 0b10; default is 0b00/0b11
                 modeValue &= (uint)~(0b11 << (unmapped.PortNumber * 2));
-
-                Console.WriteLine(_grfOffsets[unmapped.GpioNumber * 4 + unmapped.Port]);
 
                 switch (mode)
                 {
@@ -177,8 +181,10 @@ namespace Iot.Device.Gpio.Drivers
                     throw new IOException($"Error {Marshal.GetLastWin32Error()} initializing the Gpio driver.");
                 }
 
-                UIntPtr pmuGrfMap = Interop.mmap(IntPtr.Zero, Environment.SystemPageSize, (MemoryMappedProtections.PROT_READ | MemoryMappedProtections.PROT_WRITE), MemoryMappedFlags.MAP_SHARED, fileDescriptor, PmuGeneralRegisterFiles & ~_mapMask);
-                UIntPtr grfMap = Interop.mmap(IntPtr.Zero, Environment.SystemPageSize, (MemoryMappedProtections.PROT_READ | MemoryMappedProtections.PROT_WRITE), MemoryMappedFlags.MAP_SHARED, fileDescriptor, GeneralRegisterFiles & ~_mapMask);
+                UIntPtr pmuGrfMap = Interop.mmap(IntPtr.Zero, Environment.SystemPageSize, MemoryMappedProtections.PROT_READ | MemoryMappedProtections.PROT_WRITE, MemoryMappedFlags.MAP_SHARED, fileDescriptor, PmuGeneralRegisterFiles & ~_mapMask);
+                UIntPtr grfMap = Interop.mmap(IntPtr.Zero, Environment.SystemPageSize, MemoryMappedProtections.PROT_READ | MemoryMappedProtections.PROT_WRITE, MemoryMappedFlags.MAP_SHARED, fileDescriptor, GeneralRegisterFiles & ~_mapMask);
+
+                Console.WriteLine(GeneralRegisterFiles & ~_mapMask);
 
                 if (pmuGrfMap.ToUInt64() == 0)
                 {
