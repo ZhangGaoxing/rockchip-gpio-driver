@@ -29,9 +29,9 @@ namespace Iot.Device.Gpio.Drivers
         protected virtual uint[] GpioRegisterAddresses { get; } = Array.Empty<uint>();
 
         protected const string GpioMemoryFilePath = "/dev/mem";
-        protected UIntPtr[] _gpioPointers = Array.Empty<UIntPtr>();
+        protected IntPtr[] _gpioPointers = Array.Empty<IntPtr>();
         protected IDictionary<int, PinState> _pinModes = new Dictionary<int, PinState>();
-        protected readonly uint _mapMask = (uint)(Environment.SystemPageSize - 1);
+        protected readonly int _mapMask = Environment.SystemPageSize - 1;
         protected static readonly object s_initializationLock = new object();
 
         /// <summary>
@@ -168,8 +168,8 @@ namespace Iot.Device.Gpio.Drivers
             int dataAddress;
             uint* dataPointer;
 
-            // data register (GPIO_SWPORT_DR) offset is 0x0000
-            dataAddress = (int)(GpioRegisterAddresses[unmapped.GpioNumber] & _mapMask);
+            // data register (GPIO_EXT_PORTA) offset is 0x0050
+            dataAddress = (int)((GpioRegisterAddresses[unmapped.GpioNumber] + 0x0050) & _mapMask);
             dataPointer = (uint*)(_gpioPointers[unmapped.GpioNumber] + dataAddress);
             uint dataValue = *dataPointer;
 
@@ -293,7 +293,7 @@ namespace Iot.Device.Gpio.Drivers
         /// <inheritdoc/>
         protected override void Dispose(bool disposing)
         {
-            foreach (UIntPtr pointer in _gpioPointers)
+            foreach (IntPtr pointer in _gpioPointers)
             {
                 Interop.munmap(pointer, 0);
             }
@@ -320,13 +320,13 @@ namespace Iot.Device.Gpio.Drivers
                     throw new IOException($"Error {Marshal.GetLastWin32Error()} initializing the Gpio driver.");
                 }
 
-                _gpioPointers = new UIntPtr[GpioRegisterAddresses.Length];
+                _gpioPointers = new IntPtr[GpioRegisterAddresses.Length];
 
                 for (int i = 0; i < GpioRegisterAddresses.Length; i++)
                 {
-                    UIntPtr map = Interop.mmap(IntPtr.Zero, Environment.SystemPageSize, MemoryMappedProtections.PROT_READ | MemoryMappedProtections.PROT_WRITE, MemoryMappedFlags.MAP_SHARED, fileDescriptor, GpioRegisterAddresses[i] & ~_mapMask);
+                    IntPtr map = Interop.mmap(IntPtr.Zero, Environment.SystemPageSize * 8, MemoryMappedProtections.PROT_READ | MemoryMappedProtections.PROT_WRITE, MemoryMappedFlags.MAP_SHARED, fileDescriptor, (int)(GpioRegisterAddresses[i] & ~_mapMask));
 
-                    if (map.ToUInt64() == 0)
+                    if (map.ToInt64() < 0)
                     {
                         Interop.munmap(map, 0);
                         throw new IOException($"Error {Marshal.GetLastWin32Error()} initializing the Gpio driver (GPIO{i} initialize error).");

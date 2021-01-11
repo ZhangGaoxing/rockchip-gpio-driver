@@ -12,7 +12,4 @@ internal partial class Interop
 {
     [DllImport(LibcLibrary)]
     internal static extern int munmap(IntPtr addr, int length);
-
-    [DllImport(LibcLibrary)]
-    internal static extern int munmap(UIntPtr addr, int length);
 }
