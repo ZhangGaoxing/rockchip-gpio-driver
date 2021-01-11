@@ -135,13 +135,8 @@ namespace Iot.Device.Gpio.Drivers
         {
             (int GpioNumber, int Port, int PortNumber) unmapped = UnmapPinNumber(pinNumber);
 
-            int dataAddress;
-            uint* dataPointer;
-
             // data register (GPIO_SWPORT_DR) offset is 0x0000
-            dataAddress = (int)(GpioRegisterAddresses[unmapped.GpioNumber] & _mapMask);
-            dataPointer = (uint*)(_gpioPointers[unmapped.GpioNumber] + dataAddress);
-
+            uint* dataPointer = (uint*)_gpioPointers[unmapped.GpioNumber];
             uint dataValue = *dataPointer;
 
             if (value == PinValue.High)
@@ -165,12 +160,8 @@ namespace Iot.Device.Gpio.Drivers
         {
             (int GpioNumber, int Port, int PortNumber) unmapped = UnmapPinNumber(pinNumber);
 
-            int dataAddress;
-            uint* dataPointer;
-
             // data register (GPIO_EXT_PORTA) offset is 0x0050
-            dataAddress = (int)((GpioRegisterAddresses[unmapped.GpioNumber] + 0x0050) & _mapMask);
-            dataPointer = (uint*)(_gpioPointers[unmapped.GpioNumber] + dataAddress);
+            uint* dataPointer = (uint*)(_gpioPointers[unmapped.GpioNumber] + 0x0050);
             uint dataValue = *dataPointer;
 
             return Convert.ToBoolean((dataValue >> (unmapped.Port * 8 + unmapped.PortNumber)) & 1) ? PinValue.High : PinValue.Low;

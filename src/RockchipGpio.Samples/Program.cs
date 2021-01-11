@@ -11,7 +11,7 @@ namespace RockchipGpio.Samples
             int pin = RockchipDriver.MapPinNumber(4, 'C', 6);
             using GpioController controller = new GpioController(PinNumberingScheme.Logical, new Rk3399Driver());
 
-            controller.OpenPin(pin, PinMode.InputPullDown);
+            controller.OpenPin(pin, PinMode.Input);
             Console.WriteLine(controller.Read(pin));
             Console.Read();
         }

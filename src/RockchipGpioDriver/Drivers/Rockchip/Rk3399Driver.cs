@@ -2,12 +2,10 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-using Iot.Device.Gpio.Drivers.Rockchip.Rk3399Driver;
 using System;
 using System.Device.Gpio;
 using System.IO;
 using System.Runtime.InteropServices;
-using System.Threading;
 
 namespace Iot.Device.Gpio.Drivers
 {
@@ -27,8 +25,8 @@ namespace Iot.Device.Gpio.Drivers
         /// </summary>
         protected uint GeneralRegisterFiles => 0xFF77_0000;
 
-        private PmuGrfRegisterView* _pmuGrfRegisterViewPointer = null;
-        private GrfRegisterView* _grfRegisterViewPointer = null;
+        private IntPtr _grfPointer = IntPtr.Zero;
+        private IntPtr _pmuGrfPointer = IntPtr.Zero;
         private int[] _grfOffsets = new[]
         {
             0x00040, 0x00044, -1, -1,  // GPIO0 PU/PD control
@@ -52,8 +50,7 @@ namespace Iot.Device.Gpio.Drivers
             (int GpioNumber, int Port, int PortNumber) unmapped = UnmapPinNumber(pinNumber);
 
             // data register (GPIO_SWPORT_DDR) offset is 0x0004
-            int dirAddress = (int)((GpioRegisterAddresses[unmapped.GpioNumber] + 0x0004) & _mapMask);
-            uint* dirPointer = (uint*)(_gpioPointers[unmapped.GpioNumber] + dirAddress);
+            uint* dirPointer = (uint*)(_gpioPointers[unmapped.GpioNumber] + 0x0004);
             uint dirValue = *dirPointer;
 
             uint* modePointer;
@@ -62,8 +59,7 @@ namespace Iot.Device.Gpio.Drivers
 
             if (unmapped.GpioNumber <= 1)
             {
-                modePointer = &((uint*)_pmuGrfRegisterViewPointer)
-                    [_grfOffsets[unmapped.GpioNumber * 4 + unmapped.Port] / sizeof(uint)];
+                modePointer = (uint*)(_pmuGrfPointer + _grfOffsets[unmapped.GpioNumber * 4 + unmapped.Port]);
                 modeValue = *modePointer;
                 // software write enable
                 modeValue |= (uint)(0b11 << (16 + bitOffset));
@@ -84,8 +80,7 @@ namespace Iot.Device.Gpio.Drivers
             }
             else
             {
-                modePointer = &((uint*)_grfRegisterViewPointer)
-                    [_grfOffsets[unmapped.GpioNumber * 4 + unmapped.Port] / sizeof(uint)];
+                modePointer = (uint*)(_grfPointer + _grfOffsets[unmapped.GpioNumber * 4 + unmapped.Port]);
                 modeValue = *modePointer;
                 // software write enable
                 modeValue |= (uint)(0b11 << (16 + bitOffset));
@@ -121,7 +116,6 @@ namespace Iot.Device.Gpio.Drivers
             }
 
             *modePointer = modeValue;
-            Thread.SpinWait(150);
             *dirPointer = dirValue;
 
             if (_pinModes.ContainsKey(pinNumber))
@@ -147,16 +141,16 @@ namespace Iot.Device.Gpio.Drivers
         /// <inheritdoc/>
         protected override void Dispose(bool disposing)
         {
-            if (_pmuGrfRegisterViewPointer != null)
+            if (_grfPointer != IntPtr.Zero)
             {
-                Interop.munmap((IntPtr)_pmuGrfRegisterViewPointer, 0);
-                _pmuGrfRegisterViewPointer = null;
+                Interop.munmap(_grfPointer, 0);
+                _grfPointer = IntPtr.Zero;
             }
 
-            if (_grfRegisterViewPointer != null)
+            if (_pmuGrfPointer != IntPtr.Zero)
             {
-                Interop.munmap((IntPtr)_grfRegisterViewPointer, 0);
-                _grfRegisterViewPointer = null;
+                Interop.munmap(_pmuGrfPointer, 0);
+                _pmuGrfPointer = IntPtr.Zero;
             }
 
             base.Dispose(disposing);
@@ -164,14 +158,14 @@ namespace Iot.Device.Gpio.Drivers
 
         private void InitializeGeneralRegisterFiles()
         {
-            if (_grfRegisterViewPointer != null)
+            if (_grfPointer != IntPtr.Zero)
             {
                 return;
             }
 
             lock (s_initializationLock)
             {
-                if (_grfRegisterViewPointer != null)
+                if (_grfPointer != IntPtr.Zero)
                 {
                     return;
                 }
@@ -198,8 +192,8 @@ namespace Iot.Device.Gpio.Drivers
                     throw new IOException($"Error {Marshal.GetLastWin32Error()} initializing the Gpio driver (GRF initialize error).");
                 }
 
-                _pmuGrfRegisterViewPointer = (PmuGrfRegisterView*)pmuGrfMap;
-                _grfRegisterViewPointer = (GrfRegisterView*)grfMap;
+                _pmuGrfPointer = pmuGrfMap;
+                _grfPointer = grfMap;
 
                 Interop.close(fileDescriptor);
             }
