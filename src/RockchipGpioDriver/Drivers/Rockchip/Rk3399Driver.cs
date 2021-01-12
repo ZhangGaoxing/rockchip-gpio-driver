@@ -9,6 +9,9 @@ using System.Runtime.InteropServices;
 
 namespace Iot.Device.Gpio.Drivers
 {
+    /// <summary>
+    /// A GPIO driver for Rockchip RK3399
+    /// </summary>
     public unsafe class Rk3399Driver : RockchipDriver
     {
         /// <inheritdoc/>
@@ -27,13 +30,21 @@ namespace Iot.Device.Gpio.Drivers
 
         private IntPtr _grfPointer = IntPtr.Zero;
         private IntPtr _pmuGrfPointer = IntPtr.Zero;
-        private int[] _grfOffsets = new[]
+        private static readonly int[] _grfOffsets = new[]
         {
             0x00040, 0x00044, -1, -1,  // GPIO0 PU/PD control
             0x00050, 0x00054, 0x00058, 0x0005C,  // GPIO1 PU/PD control
             0x0E040, 0x0E044, 0x0E048, 0x0E04C,  // GPIO2 PU/PD control
             0x0E050, 0x0E054, 0x0E058, 0x0E05C,  // GPIO3 PU/PD control
             0x0E060, 0x0E064, 0x0E068, 0x0E06C  // GPIO4 PU/PD control
+        };
+        private static readonly int[] _iomuxOffsets = new[]
+        {
+            0x00000, 0x00004, -1, -1,  // GPIO0 iomux control
+            0x00010, 0x00014, 0x00018, 0x0001C,  // GPIO1 iomux control
+            0x0E000, 0x0E004, 0x0E008, 0x0E00C,  // GPIO2 iomux control
+            0x0E010, 0x0E014, 0x0E018, 0x0E01C,  // GPIO3 iomux control
+            0x0E020, 0x0E024, 0x0E028, 0x0E02C  // GPIO4 iomux control
         };
 
         /// <summary>
@@ -48,57 +59,12 @@ namespace Iot.Device.Gpio.Drivers
         protected override void SetPinMode(int pinNumber, PinMode mode)
         {
             (int GpioNumber, int Port, int PortNumber) unmapped = UnmapPinNumber(pinNumber);
+            int bitOffset = unmapped.PortNumber * 2;
 
+            // set GPIO direction
             // data register (GPIO_SWPORT_DDR) offset is 0x0004
             uint* dirPointer = (uint*)(_gpioPointers[unmapped.GpioNumber] + 0x0004);
             uint dirValue = *dirPointer;
-
-            uint* modePointer;
-            uint modeValue;
-            int bitOffset = unmapped.PortNumber * 2;
-
-            if (unmapped.GpioNumber <= 1)
-            {
-                modePointer = (uint*)(_pmuGrfPointer + _grfOffsets[unmapped.GpioNumber * 4 + unmapped.Port]);
-                modeValue = *modePointer;
-                // software write enable
-                modeValue |= (uint)(0b11 << (16 + bitOffset));
-                // set pull-up/pull-down: pull-up is 0b11; pull-down is 0b01; default is 0b00/0b10
-                modeValue &= (uint)~(0b11 << bitOffset);
-
-                switch (mode)
-                {
-                    case PinMode.InputPullDown:
-                        modeValue |= (uint)(0b01 << bitOffset);
-                        break;
-                    case PinMode.InputPullUp:
-                        modeValue |= (uint)(0b11 << bitOffset);
-                        break;
-                    default:
-                        break;
-                }
-            }
-            else
-            {
-                modePointer = (uint*)(_grfPointer + _grfOffsets[unmapped.GpioNumber * 4 + unmapped.Port]);
-                modeValue = *modePointer;
-                // software write enable
-                modeValue |= (uint)(0b11 << (16 + bitOffset));
-                // set pull-up/pull-down: pull-up is 0b01; pull-down is 0b10; default is 0b00/0b11
-                modeValue &= (uint)~(0b11 << bitOffset);
-
-                switch (mode)
-                {
-                    case PinMode.InputPullDown:
-                        modeValue |= (uint)(0b10 << bitOffset);
-                        break;
-                    case PinMode.InputPullUp:
-                        modeValue |= (uint)(0b01 << bitOffset);
-                        break;
-                    default:
-                        break;
-                }
-            }
 
             switch (mode)
             {
@@ -115,8 +81,74 @@ namespace Iot.Device.Gpio.Drivers
                     break;
             }
 
-            *modePointer = modeValue;
+            
+            uint* modePointer, iomuxPointer;
+            uint modeValue, iomuxValue;
+
+            if (unmapped.GpioNumber == 0)
+            {
+                // set pin to GPIO mode
+                iomuxPointer = (uint*)(_pmuGrfPointer + _iomuxOffsets[unmapped.GpioNumber * 4 + unmapped.Port]);
+                iomuxValue = *iomuxPointer;
+                // software write enable
+                iomuxValue |= (uint)(0b11 << (16 + bitOffset));
+                // GPIO mode is 0x00
+                iomuxValue &= (uint)~(0b11 << bitOffset);
+
+                // set GPIO pull-up/down mode
+                modePointer = (uint*)(_pmuGrfPointer + _grfOffsets[unmapped.GpioNumber * 4 + unmapped.Port]);
+                modeValue = *modePointer;
+                // software write enable
+                modeValue |= (uint)(0b11 << (16 + bitOffset));
+                // pull-up is 0b11; pull-down is 0b01; default is 0b00/0b10
+                modeValue &= (uint)~(0b11 << bitOffset);
+
+                switch (mode)
+                {
+                    case PinMode.InputPullDown:
+                        modeValue |= (uint)(0b01 << bitOffset);
+                        break;
+                    case PinMode.InputPullUp:
+                        modeValue |= (uint)(0b11 << bitOffset);
+                        break;
+                    default:
+                        break;
+                }
+            }
+            else
+            {
+                // set pin to GPIO mode
+                iomuxPointer = (uint*)(_grfPointer + _iomuxOffsets[unmapped.GpioNumber * 4 + unmapped.Port]);
+                iomuxValue = *iomuxPointer;
+                // software write enable
+                iomuxValue |= (uint)(0b11 << (16 + bitOffset));
+                // GPIO mode is 0x00
+                iomuxValue &= (uint)~(0b11 << bitOffset);
+
+                // set GPIO pull-up/down mode
+                modePointer = (uint*)(_grfPointer + _grfOffsets[unmapped.GpioNumber * 4 + unmapped.Port]);
+                modeValue = *modePointer;
+                // software write enable
+                modeValue |= (uint)(0b11 << (16 + bitOffset));
+                // pull-up is 0b01; pull-down is 0b10; default is 0b00
+                modeValue &= (uint)~(0b11 << bitOffset);
+  
+                switch (mode)
+                {
+                    case PinMode.InputPullDown:
+                        modeValue |= (uint)(0b10 << bitOffset);
+                        break;
+                    case PinMode.InputPullUp:
+                        modeValue |= (uint)(0b01 << bitOffset);
+                        break;
+                    default:
+                        break;
+                }
+            }
+
             *dirPointer = dirValue;
+            *modePointer = modeValue;
+            *iomuxPointer = iomuxValue;
 
             if (_pinModes.ContainsKey(pinNumber))
             {
