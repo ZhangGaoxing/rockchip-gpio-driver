@@ -9,15 +9,17 @@ namespace RockchipGpio.Samples
     {
         static void Main(string[] args)
         {
-            using GpioController controller = new GpioController(PinNumberingScheme.Board, new OrangePi4());
+            using GpioController controller = new GpioController(PinNumberingScheme.Board, new NanoPiR2S());
 
-            for (int i = 1; i <= 40; i++)
+            foreach (var item in NanoPiR2S._pinNumberConverter)
             {
-                Console.WriteLine(i);
-                if (OrangePi4._pinNumberConverter[i] == -1)
+                Console.WriteLine(item);
+                if (item == -1)
                 {
                     continue;
                 }
+
+                int i = Array.IndexOf(NanoPiR2S._pinNumberConverter, item);
 
                 controller.OpenPin(i, PinMode.InputPullUp);
                 Console.WriteLine(controller.Read(i));
@@ -29,7 +31,7 @@ namespace RockchipGpio.Samples
                 Console.WriteLine(controller.Read(i));
                 Thread.Sleep(1000);
                 controller.ClosePin(i);
-            }
+            }  
         }
     }
 }

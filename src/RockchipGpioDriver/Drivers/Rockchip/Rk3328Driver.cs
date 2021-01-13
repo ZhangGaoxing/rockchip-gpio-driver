@@ -1,56 +1,52 @@
-﻿// Licensed to the .NET Foundation under one or more agreements.
-// The .NET Foundation licenses this file to you under the MIT license.
-// See the LICENSE file in the project root for more information.
-
-using System;
+﻿using System;
+using System.Collections.Generic;
 using System.Device.Gpio;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Iot.Device.Gpio.Drivers
 {
     /// <summary>
-    /// A GPIO driver for Rockchip RK3399
+    /// A GPIO driver for Rockchip RK3328
     /// </summary>
-    public unsafe class Rk3399Driver : RockchipDriver
+    public unsafe class Rk3328Driver : RockchipDriver
     {
         /// <inheritdoc/>
         protected override uint[] GpioRegisterAddresses =>
-            new[] { 0xFF72_0000, 0xFF73_0000, 0xFF78_0000, 0xFF78_8000, 0xFF79_0000 };
-
-        /// <summary>
-        /// PMUGRF, used for always on sysyem.
-        /// </summary>
-        protected uint PmuGeneralRegisterFiles => 0xFF32_0000;
+            new[] { 0xFF21_0000, 0xFF22_0000, 0xFF23_0000, 0xFF24_8000 };
 
         /// <summary>
         /// GRF, used for general non-secure system.
         /// </summary>
-        protected uint GeneralRegisterFiles => 0xFF77_0000;
+        protected uint GeneralRegisterFiles => 0xFF10_0000;
 
         private IntPtr _grfPointer = IntPtr.Zero;
-        private IntPtr _pmuGrfPointer = IntPtr.Zero;
         private static readonly int[] _grfOffsets = new[]
         {
-            0x00040, 0x00044, -1, -1,  // GPIO0 PU/PD control
-            0x00050, 0x00054, 0x00058, 0x0005C,  // GPIO1 PU/PD control
-            0x0E040, 0x0E044, 0x0E048, 0x0E04C,  // GPIO2 PU/PD control
-            0x0E050, 0x0E054, 0x0E058, 0x0E05C,  // GPIO3 PU/PD control
-            0x0E060, 0x0E064, 0x0E068, 0x0E06C  // GPIO4 PU/PD control
+            0x0100, 0x0104, 0x0108, 0x010C,  // GPIO0 PU/PD control
+            0x0110, 0x0114, 0x0118, 0x011C,  // GPIO1 PU/PD control
+            0x0120, 0x0124, 0x0128, 0x012C,  // GPIO2 PU/PD control
+            0x0130, 0x0134, 0x0138, 0x013C  // GPIO3 PU/PD control
         };
         private static readonly int[] _iomuxOffsets = new[]
         {
-            0x00000, 0x00004, -1, -1,  // GPIO0 iomux control
-            0x00010, 0x00014, 0x00018, 0x0001C,  // GPIO1 iomux control
-            0x0E000, 0x0E004, 0x0E008, 0x0E00C,  // GPIO2 iomux control
-            0x0E010, 0x0E014, 0x0E018, 0x0E01C,  // GPIO3 iomux control
-            0x0E020, 0x0E024, 0x0E028, 0x0E02C  // GPIO4 iomux control
+            0x0000, -1, 0x0004, -1, 0x0008, -1, 0x000C, -1,  // GPIO0 iomux control
+            0x0010, -1, 0x0014, -1, 0x0018, -1, 0x001C, -1,  // GPIO1 iomux control
+            // H: GPIO0-4; L: GPIO5-7; value length is 3 bit
+            // 2A       2BL     2BH     2CL     2CH     2D
+            0x0020, -1, 0x0024, 0x0028, 0x002C, 0x0030, 0x0034, -1,  // GPIO2 iomux control
+            // 3AL  3AH     3BL     3BH     3C          3D
+            0x0038, 0x003C, 0x0040, 0x0044, 0x0048, -1, 0x004C, -1  // GPIO3 iomux control
         };
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="Rk3399Driver"/> class.
+        /// Initializes a new instance of the <see cref="Rk3328Driver"/> class.
         /// </summary>
-        public Rk3399Driver()
+        public Rk3328Driver()
         {
             InitializeGeneralRegisterFiles();
         }
@@ -84,65 +80,57 @@ namespace Iot.Device.Gpio.Drivers
             uint* modePointer, iomuxPointer;
             uint modeValue, iomuxValue;
 
-            if (unmapped.GpioNumber == 0)
+            if (_iomuxOffsets[unmapped.GpioNumber * 8 + unmapped.Port * 2 + 1] == -1)
             {
+                // high and low registers are not distinguished
                 // set pin to GPIO mode
-                iomuxPointer = (uint*)(_pmuGrfPointer + _iomuxOffsets[unmapped.GpioNumber * 4 + unmapped.Port]);
+                iomuxPointer = (uint*)(_grfPointer + _iomuxOffsets[unmapped.GpioNumber * 8 + unmapped.Port * 2]);
                 iomuxValue = *iomuxPointer;
                 // software write enable
                 iomuxValue |= (uint)(0b11 << (16 + bitOffset));
                 // GPIO mode is 0x00
                 iomuxValue &= (uint)~(0b11 << bitOffset);
-
-                // set GPIO pull-up/down mode
-                modePointer = (uint*)(_pmuGrfPointer + _grfOffsets[unmapped.GpioNumber * 4 + unmapped.Port]);
-                modeValue = *modePointer;
-                // software write enable
-                modeValue |= (uint)(0b11 << (16 + bitOffset));
-                // pull-up is 0b11; pull-down is 0b01; default is 0b00/0b10
-                modeValue &= (uint)~(0b11 << bitOffset);
-
-                switch (mode)
-                {
-                    case PinMode.InputPullDown:
-                        modeValue |= (uint)(0b01 << bitOffset);
-                        break;
-                    case PinMode.InputPullUp:
-                        modeValue |= (uint)(0b11 << bitOffset);
-                        break;
-                    default:
-                        break;
-                }
             }
             else
             {
-                // set pin to GPIO mode
-                iomuxPointer = (uint*)(_grfPointer + _iomuxOffsets[unmapped.GpioNumber * 4 + unmapped.Port]);
+                int iomuxBitOffset = unmapped.PortNumber * 3;
+
+                if (unmapped.PortNumber <= 4)
+                {
+                    // low register
+                    iomuxPointer = (uint*)(_grfPointer + _iomuxOffsets[unmapped.GpioNumber * 8 + unmapped.Port * 2]);
+                }
+                else
+                {
+                    // high register
+                    iomuxPointer = (uint*)(_grfPointer + _iomuxOffsets[unmapped.GpioNumber * 8 + unmapped.Port * 2 + 1]);
+                }
+
                 iomuxValue = *iomuxPointer;
                 // software write enable
-                iomuxValue |= (uint)(0b11 << (16 + bitOffset));
-                // GPIO mode is 0x00
-                iomuxValue &= (uint)~(0b11 << bitOffset);
+                iomuxValue |= (uint)(0b111 << (16 + iomuxBitOffset));
+                // GPIO mode is 0x000
+                iomuxValue &= (uint)~(0b111 << iomuxBitOffset);
+            }
 
-                // set GPIO pull-up/down mode
-                modePointer = (uint*)(_grfPointer + _grfOffsets[unmapped.GpioNumber * 4 + unmapped.Port]);
-                modeValue = *modePointer;
-                // software write enable
-                modeValue |= (uint)(0b11 << (16 + bitOffset));
-                // pull-up is 0b01; pull-down is 0b10; default is 0b00
-                modeValue &= (uint)~(0b11 << bitOffset);
-  
-                switch (mode)
-                {
-                    case PinMode.InputPullDown:
-                        modeValue |= (uint)(0b10 << bitOffset);
-                        break;
-                    case PinMode.InputPullUp:
-                        modeValue |= (uint)(0b01 << bitOffset);
-                        break;
-                    default:
-                        break;
-                }
+            // set GPIO pull-up/down mode
+            modePointer = (uint*)(_grfPointer + _grfOffsets[unmapped.GpioNumber * 4 + unmapped.Port]);
+            modeValue = *modePointer;
+            // software write enable
+            modeValue |= (uint)(0b11 << (16 + bitOffset));
+            // pull-up is 0b01; pull-down is 0b10; default is 0b00
+            modeValue &= (uint)~(0b11 << bitOffset);
+
+            switch (mode)
+            {
+                case PinMode.InputPullDown:
+                    modeValue |= (uint)(0b10 << bitOffset);
+                    break;
+                case PinMode.InputPullUp:
+                    modeValue |= (uint)(0b01 << bitOffset);
+                    break;
+                default:
+                    break;
             }
 
             *iomuxPointer = iomuxValue;
@@ -178,12 +166,6 @@ namespace Iot.Device.Gpio.Drivers
                 _grfPointer = IntPtr.Zero;
             }
 
-            if (_pmuGrfPointer != IntPtr.Zero)
-            {
-                Interop.munmap(_pmuGrfPointer, 0);
-                _pmuGrfPointer = IntPtr.Zero;
-            }
-
             base.Dispose(disposing);
         }
 
@@ -208,14 +190,7 @@ namespace Iot.Device.Gpio.Drivers
                 }
 
                 // register size is 64kb
-                IntPtr pmuGrfMap = Interop.mmap(IntPtr.Zero, Environment.SystemPageSize * 16, MemoryMappedProtections.PROT_READ | MemoryMappedProtections.PROT_WRITE, MemoryMappedFlags.MAP_SHARED, fileDescriptor, (int)(PmuGeneralRegisterFiles & ~_mapMask));
                 IntPtr grfMap = Interop.mmap(IntPtr.Zero, Environment.SystemPageSize * 16, MemoryMappedProtections.PROT_READ | MemoryMappedProtections.PROT_WRITE, MemoryMappedFlags.MAP_SHARED, fileDescriptor, (int)(GeneralRegisterFiles & ~_mapMask));
-
-                if (pmuGrfMap.ToInt64() < 0)
-                {
-                    Interop.munmap(pmuGrfMap, 0);
-                    throw new IOException($"Error {Marshal.GetLastWin32Error()} initializing the Gpio driver (PMU GRF initialize error).");
-                }
 
                 if (grfMap.ToInt64() < 0)
                 {
@@ -223,7 +198,6 @@ namespace Iot.Device.Gpio.Drivers
                     throw new IOException($"Error {Marshal.GetLastWin32Error()} initializing the Gpio driver (GRF initialize error).");
                 }
 
-                _pmuGrfPointer = pmuGrfMap;
                 _grfPointer = grfMap;
 
                 Interop.close(fileDescriptor);
