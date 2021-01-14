@@ -19,17 +19,29 @@ namespace Iot.Device.Gpio.Drivers
             new[] { 0xFF72_0000, 0xFF73_0000, 0xFF78_0000, 0xFF78_8000, 0xFF79_0000 };
 
         /// <summary>
-        /// PMUGRF, used for always on sysyem.
+        /// PMU General Register Files (PMU GRF).
         /// </summary>
         protected uint PmuGeneralRegisterFiles => 0xFF32_0000;
 
         /// <summary>
-        /// GRF, used for general non-secure system.
+        /// PMU Clock and Reset Unit (PMU CRU).
+        /// </summary>
+        protected uint PmuClockResetUnit => 0xFF75_0000;
+
+        /// <summary>
+        /// General Register Files (GRF).
         /// </summary>
         protected uint GeneralRegisterFiles => 0xFF77_0000;
 
-        private IntPtr _grfPointer = IntPtr.Zero;
+        /// <summary>
+        /// Clock and Reset Unit (CRU).
+        /// </summary>
+        protected uint ClockResetUnit => 0xFF76_0000;
+
         private IntPtr _pmuGrfPointer = IntPtr.Zero;
+        private IntPtr _grfPointer = IntPtr.Zero;
+        private IntPtr _pmucruPointer = IntPtr.Zero;
+        private IntPtr _cruPointer = IntPtr.Zero;
         private static readonly int[] _grfOffsets = new[]
         {
             0x00040, 0x00044, -1, -1,  // GPIO0 PU/PD control
@@ -52,7 +64,8 @@ namespace Iot.Device.Gpio.Drivers
         /// </summary>
         public Rk3399Driver()
         {
-            InitializeGeneralRegisterFiles();
+            Initialize();
+            EnableGpio(true);
         }
 
         /// <inheritdoc/>
@@ -172,11 +185,7 @@ namespace Iot.Device.Gpio.Drivers
         /// <inheritdoc/>
         protected override void Dispose(bool disposing)
         {
-            if (_grfPointer != IntPtr.Zero)
-            {
-                Interop.munmap(_grfPointer, 0);
-                _grfPointer = IntPtr.Zero;
-            }
+            EnableGpio(false);
 
             if (_pmuGrfPointer != IntPtr.Zero)
             {
@@ -184,10 +193,59 @@ namespace Iot.Device.Gpio.Drivers
                 _pmuGrfPointer = IntPtr.Zero;
             }
 
+            if (_grfPointer != IntPtr.Zero)
+            {
+                Interop.munmap(_grfPointer, 0);
+                _grfPointer = IntPtr.Zero;
+            }
+
+            if (_pmucruPointer != IntPtr.Zero)
+            {
+                Interop.munmap(_pmucruPointer, 0);
+                _pmucruPointer = IntPtr.Zero;
+            }
+
+            if (_cruPointer != IntPtr.Zero)
+            {
+                Interop.munmap(_cruPointer, 0);
+                _cruPointer = IntPtr.Zero;
+            }
+
             base.Dispose(disposing);
         }
 
-        private void InitializeGeneralRegisterFiles()
+        private void EnableGpio(bool enable)
+        {
+            uint* pmuCruPointer, cruPointer;
+            uint pmuCruValue, cruValue;
+
+            // PMUCRU_CLKGATE_CON1 offset is 0x0104 (GPIO0, GPIO1)
+            pmuCruPointer = (uint*)(_pmucruPointer + 0x0104);
+            pmuCruValue = *pmuCruPointer;
+            // CRU_CLKGATE_CON31 offset is 0x037C
+            cruPointer = (uint*)(_cruPointer + 0x037C);
+            cruValue = *cruPointer;
+
+            // software write enable
+            pmuCruValue |= 0b11U << (16 + 3);
+            cruValue |= 0b111U << (16 + 3);
+            if (enable)
+            {
+                // when HIGH, disabled
+                pmuCruValue &= ~(0b11U << 3);
+                cruValue &= ~(0b111U << 3);
+            }
+            else
+            {
+                pmuCruValue |= 0b11U << 3;
+                cruValue |= 0b111U << 3;
+            }
+
+            *pmuCruPointer = pmuCruValue;
+            *cruPointer = cruValue;
+        }
+
+        private void Initialize()
         {
             if (_grfPointer != IntPtr.Zero)
             {
@@ -210,6 +268,8 @@ namespace Iot.Device.Gpio.Drivers
                 // register size is 64kb
                 IntPtr pmuGrfMap = Interop.mmap(IntPtr.Zero, Environment.SystemPageSize * 16, MemoryMappedProtections.PROT_READ | MemoryMappedProtections.PROT_WRITE, MemoryMappedFlags.MAP_SHARED, fileDescriptor, (int)(PmuGeneralRegisterFiles & ~_mapMask));
                 IntPtr grfMap = Interop.mmap(IntPtr.Zero, Environment.SystemPageSize * 16, MemoryMappedProtections.PROT_READ | MemoryMappedProtections.PROT_WRITE, MemoryMappedFlags.MAP_SHARED, fileDescriptor, (int)(GeneralRegisterFiles & ~_mapMask));
+                IntPtr pmuCruMap = Interop.mmap(IntPtr.Zero, Environment.SystemPageSize * 16, MemoryMappedProtections.PROT_READ | MemoryMappedProtections.PROT_WRITE, MemoryMappedFlags.MAP_SHARED, fileDescriptor, (int)(PmuClockResetUnit & ~_mapMask));
+                IntPtr cruMap = Interop.mmap(IntPtr.Zero, Environment.SystemPageSize * 16, MemoryMappedProtections.PROT_READ | MemoryMappedProtections.PROT_WRITE, MemoryMappedFlags.MAP_SHARED, fileDescriptor, (int)(ClockResetUnit & ~_mapMask));
 
                 if (pmuGrfMap.ToInt64() < 0)
                 {
@@ -223,8 +283,22 @@ namespace Iot.Device.Gpio.Drivers
                     throw new IOException($"Error {Marshal.GetLastWin32Error()} initializing the Gpio driver (GRF initialize error).");
                 }
 
+                if (pmuCruMap.ToInt64() < 0)
+                {
+                    Interop.munmap(pmuCruMap, 0);
+                    throw new IOException($"Error {Marshal.GetLastWin32Error()} initializing the Gpio driver (PMU CRU initialize error).");
+                }
+
+                if (cruMap.ToInt64() < 0)
+                {
+                    Interop.munmap(cruMap, 0);
+                    throw new IOException($"Error {Marshal.GetLastWin32Error()} initializing the Gpio driver (CRU initialize error).");
+                }
+
                 _pmuGrfPointer = pmuGrfMap;
                 _grfPointer = grfMap;
+                _pmucruPointer = pmuCruMap;
+                _cruPointer = cruMap;
 
                 Interop.close(fileDescriptor);
             }
