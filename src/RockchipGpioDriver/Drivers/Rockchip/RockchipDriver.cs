@@ -141,11 +141,11 @@ namespace Iot.Device.Gpio.Drivers
 
             if (value == PinValue.High)
             {
-                dataValue |= (uint)(1 << (unmapped.Port * 8 + unmapped.PortNumber));
+                dataValue |= 1U << (unmapped.Port * 8 + unmapped.PortNumber);
             }
             else
             {
-                dataValue &= (uint)~(1 << (unmapped.Port * 8 + unmapped.PortNumber));
+                dataValue &= ~(1U << (unmapped.Port * 8 + unmapped.PortNumber));
             }
 
             *dataPointer = dataValue;

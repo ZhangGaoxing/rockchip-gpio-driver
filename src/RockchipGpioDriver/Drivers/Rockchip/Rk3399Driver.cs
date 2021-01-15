@@ -85,10 +85,10 @@ namespace Iot.Device.Gpio.Drivers
                 case PinMode.InputPullDown:
                 case PinMode.InputPullUp:
                     // set direction: input is 0; output is 1
-                    dirValue &= (uint)~(1 << (unmapped.Port * 8 + unmapped.PortNumber));
+                    dirValue &= ~(1U << (unmapped.Port * 8 + unmapped.PortNumber));
                     break;
                 case PinMode.Output:
-                    dirValue |= (uint)(1 << (unmapped.Port * 8 + unmapped.PortNumber));
+                    dirValue |= 1U << (unmapped.Port * 8 + unmapped.PortNumber);
                     break;
                 default:
                     break;
@@ -103,25 +103,25 @@ namespace Iot.Device.Gpio.Drivers
                 iomuxPointer = (uint*)(_pmuGrfPointer + _iomuxOffsets[unmapped.GpioNumber * 4 + unmapped.Port]);
                 iomuxValue = *iomuxPointer;
                 // software write enable
-                iomuxValue |= (uint)(0b11 << (16 + bitOffset));
+                iomuxValue |= 0b11U << (16 + bitOffset);
                 // GPIO mode is 0x00
-                iomuxValue &= (uint)~(0b11 << bitOffset);
+                iomuxValue &= ~(0b11U << bitOffset);
 
                 // set GPIO pull-up/down mode
                 modePointer = (uint*)(_pmuGrfPointer + _grfOffsets[unmapped.GpioNumber * 4 + unmapped.Port]);
                 modeValue = *modePointer;
                 // software write enable
-                modeValue |= (uint)(0b11 << (16 + bitOffset));
+                modeValue |= 0b11U << (16 + bitOffset);
                 // pull-up is 0b11; pull-down is 0b01; default is 0b00/0b10
-                modeValue &= (uint)~(0b11 << bitOffset);
+                modeValue &= ~(0b11U << bitOffset);
 
                 switch (mode)
                 {
                     case PinMode.InputPullDown:
-                        modeValue |= (uint)(0b01 << bitOffset);
+                        modeValue |= 0b01U << bitOffset;
                         break;
                     case PinMode.InputPullUp:
-                        modeValue |= (uint)(0b11 << bitOffset);
+                        modeValue |= 0b11U << bitOffset;
                         break;
                     default:
                         break;
@@ -133,25 +133,25 @@ namespace Iot.Device.Gpio.Drivers
                 iomuxPointer = (uint*)(_grfPointer + _iomuxOffsets[unmapped.GpioNumber * 4 + unmapped.Port]);
                 iomuxValue = *iomuxPointer;
                 // software write enable
-                iomuxValue |= (uint)(0b11 << (16 + bitOffset));
+                iomuxValue |= 0b11U << (16 + bitOffset);
                 // GPIO mode is 0x00
-                iomuxValue &= (uint)~(0b11 << bitOffset);
+                iomuxValue &= ~(0b11U << bitOffset);
 
                 // set GPIO pull-up/down mode
                 modePointer = (uint*)(_grfPointer + _grfOffsets[unmapped.GpioNumber * 4 + unmapped.Port]);
                 modeValue = *modePointer;
                 // software write enable
-                modeValue |= (uint)(0b11 << (16 + bitOffset));
+                modeValue |= 0b11U << (16 + bitOffset);
                 // pull-up is 0b01; pull-down is 0b10; default is 0b00
-                modeValue &= (uint)~(0b11 << bitOffset);
+                modeValue &= ~(0b11U << bitOffset);
   
                 switch (mode)
                 {
                     case PinMode.InputPullDown:
-                        modeValue |= (uint)(0b10 << bitOffset);
+                        modeValue |= 0b10U << bitOffset;
                         break;
                     case PinMode.InputPullUp:
-                        modeValue |= (uint)(0b01 << bitOffset);
+                        modeValue |= 0b01U << bitOffset;
                         break;
                     default:
                         break;
