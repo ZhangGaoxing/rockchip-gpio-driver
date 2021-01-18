@@ -40,7 +40,7 @@ namespace Iot.Device.Gpio.Drivers
 
         private IntPtr _pmuGrfPointer = IntPtr.Zero;
         private IntPtr _grfPointer = IntPtr.Zero;
-        private IntPtr _pmucruPointer = IntPtr.Zero;
+        private IntPtr _pmuCruPointer = IntPtr.Zero;
         private IntPtr _cruPointer = IntPtr.Zero;
         private static readonly int[] _grfOffsets = new[]
         {
@@ -129,22 +129,33 @@ namespace Iot.Device.Gpio.Drivers
             }
             else
             {
-                // set pin to GPIO mode
-                iomuxPointer = (uint*)(_grfPointer + _iomuxOffsets[unmapped.GpioNumber * 4 + unmapped.Port]);
+                if (unmapped.GpioNumber == 1)
+                {
+                    // set pin to GPIO mode
+                    iomuxPointer = (uint*)(_pmuGrfPointer + _iomuxOffsets[unmapped.GpioNumber * 4 + unmapped.Port]);
+                    // set GPIO pull-up/down mode
+                    modePointer = (uint*)(_pmuGrfPointer + _grfOffsets[unmapped.GpioNumber * 4 + unmapped.Port]);
+                }
+                else
+                {
+                    // set pin to GPIO mode
+                    iomuxPointer = (uint*)(_grfPointer + _iomuxOffsets[unmapped.GpioNumber * 4 + unmapped.Port]);
+                    // set GPIO pull-up/down mode
+                    modePointer = (uint*)(_grfPointer + _grfOffsets[unmapped.GpioNumber * 4 + unmapped.Port]);
+                }
+
                 iomuxValue = *iomuxPointer;
                 // software write enable
                 iomuxValue |= 0b11U << (16 + bitOffset);
                 // GPIO mode is 0x00
                 iomuxValue &= ~(0b11U << bitOffset);
 
-                // set GPIO pull-up/down mode
-                modePointer = (uint*)(_grfPointer + _grfOffsets[unmapped.GpioNumber * 4 + unmapped.Port]);
                 modeValue = *modePointer;
                 // software write enable
                 modeValue |= 0b11U << (16 + bitOffset);
                 // pull-up is 0b01; pull-down is 0b10; default is 0b00
                 modeValue &= ~(0b11U << bitOffset);
-  
+
                 switch (mode)
                 {
                     case PinMode.InputPullDown:
@@ -199,10 +210,10 @@ namespace Iot.Device.Gpio.Drivers
                 _grfPointer = IntPtr.Zero;
             }
 
-            if (_pmucruPointer != IntPtr.Zero)
+            if (_pmuCruPointer != IntPtr.Zero)
             {
-                Interop.munmap(_pmucruPointer, 0);
-                _pmucruPointer = IntPtr.Zero;
+                Interop.munmap(_pmuCruPointer, 0);
+                _pmuCruPointer = IntPtr.Zero;
             }
 
             if (_cruPointer != IntPtr.Zero)
@@ -220,7 +231,7 @@ namespace Iot.Device.Gpio.Drivers
             uint pmuCruValue, cruValue;
 
             // PMUCRU_CLKGATE_CON1 offset is 0x0104 (GPIO0, GPIO1)
-            pmuCruPointer = (uint*)(_pmucruPointer + 0x0104);
+            pmuCruPointer = (uint*)(_pmuCruPointer + 0x0104);
             pmuCruValue = *pmuCruPointer;
             // CRU_CLKGATE_CON31 offset is 0x037C
             cruPointer = (uint*)(_cruPointer + 0x037C);
@@ -297,7 +308,7 @@ namespace Iot.Device.Gpio.Drivers
 
                 _pmuGrfPointer = pmuGrfMap;
                 _grfPointer = grfMap;
-                _pmucruPointer = pmuCruMap;
+                _pmuCruPointer = pmuCruMap;
                 _cruPointer = cruMap;
 
                 Interop.close(fileDescriptor);
