@@ -23,16 +23,23 @@ namespace Iot.Device.Gpio.Drivers
     /// </remarks>
     public unsafe class RockchipDriver : SysFsDriver
     {
+        protected const string GpioMemoryFilePath = "/dev/mem";
+        protected IDictionary<int, PinState> _pinModes = new Dictionary<int, PinState>();
+        protected readonly int _mapMask = Environment.SystemPageSize - 1;
+        protected static readonly object s_initializationLock = new object();
+
+        protected IntPtr[] _gpioPointers = Array.Empty<IntPtr>();
+
         /// <summary>
         /// Gpio register addresses.
         /// </summary>
         protected virtual uint[] GpioRegisterAddresses { get; } = Array.Empty<uint>();
 
-        protected const string GpioMemoryFilePath = "/dev/mem";
-        protected IntPtr[] _gpioPointers = Array.Empty<IntPtr>();
-        protected IDictionary<int, PinState> _pinModes = new Dictionary<int, PinState>();
-        protected readonly int _mapMask = Environment.SystemPageSize - 1;
-        protected static readonly object s_initializationLock = new object();
+        /// <inheritdoc/>
+        protected override int PinCount => throw new PlatformNotSupportedException("This driver is generic so it can not enumerate how many pins are available.");
+
+        /// <inheritdoc/>
+        protected override int ConvertPinNumberToLogicalNumberingScheme(int pinNumber) => throw new PlatformNotSupportedException("This driver is generic so it can not perform conversions between pin numbering schemes.");
 
         /// <summary>
         /// Initializes a new instance of the <see cref="RockchipDriver"/> class.
@@ -52,31 +59,13 @@ namespace Iot.Device.Gpio.Drivers
             Initialize();
         }
 
-        /// <summary>
-        /// The number of pins provided by the driver.
-        /// </summary>
-        protected override int PinCount => throw new PlatformNotSupportedException("This driver is generic so it can not enumerate how many pins are available.");
-
-        /// <summary>
-        /// Converts a board pin number to the driver's logical numbering scheme.
-        /// </summary>
-        /// <param name="pinNumber">The board pin number to convert.</param>
-        /// <returns>The pin number in the driver's logical numbering scheme.</returns>
-        protected override int ConvertPinNumberToLogicalNumberingScheme(int pinNumber) => throw new PlatformNotSupportedException("This driver is generic so it can not perform conversions between pin numbering schemes.");
-
-        /// <summary>
-        /// Opens a pin in order for it to be ready to use.
-        /// </summary>
-        /// <param name="pinNumber">The pin number in the driver's logical numbering scheme.</param>
+        /// <inheritdoc/>
         protected override void OpenPin(int pinNumber)
         {
             SetPinMode(pinNumber, PinMode.Input);
         }
 
-        /// <summary>
-        /// Closes an open pin.
-        /// </summary>
-        /// <param name="pinNumber">The pin number in the driver's logical numbering scheme.</param>
+        /// <inheritdoc/>
         protected override void ClosePin(int pinNumber)
         {
             if (_pinModes.ContainsKey(pinNumber))
@@ -104,11 +93,7 @@ namespace Iot.Device.Gpio.Drivers
             }
         }
 
-        /// <summary>
-        /// Sets the mode to a pin.
-        /// </summary>
-        /// <param name="pinNumber">The pin number in the driver's logical numbering scheme.</param>
-        /// <param name="mode">The mode to be set.</param>
+        /// <inheritdoc/>
         protected override void SetPinMode(int pinNumber, PinMode mode)
         {
             // different chips have different number of GRFs and offsets
@@ -126,11 +111,7 @@ namespace Iot.Device.Gpio.Drivers
             }
         }
 
-        /// <summary>
-        /// Writes a value to a pin.
-        /// </summary>
-        /// <param name="pinNumber">The pin number in the driver's logical numbering scheme.</param>
-        /// <param name="value">The value to be written to the pin.</param>
+        /// <inheritdoc/>
         protected override void Write(int pinNumber, PinValue value)
         {
             (int GpioNumber, int Port, int PortNumber) unmapped = UnmapPinNumber(pinNumber);
@@ -141,21 +122,17 @@ namespace Iot.Device.Gpio.Drivers
 
             if (value == PinValue.High)
             {
-                dataValue |= 1U << (unmapped.Port * 8 + unmapped.PortNumber);
+                dataValue |= 0b1U << (unmapped.Port * 8 + unmapped.PortNumber);
             }
             else
             {
-                dataValue &= ~(1U << (unmapped.Port * 8 + unmapped.PortNumber));
+                dataValue &= ~(0b1U << (unmapped.Port * 8 + unmapped.PortNumber));
             }
 
             *dataPointer = dataValue;
         }
 
-        /// <summary>
-        /// Reads the current value of a pin.
-        /// </summary>
-        /// <param name="pinNumber">The pin number in the driver's logical numbering scheme.</param>
-        /// <returns>The value of the pin.</returns>
+        /// <inheritdoc/>
         protected unsafe override PinValue Read(int pinNumber)
         {
             (int GpioNumber, int Port, int PortNumber) unmapped = UnmapPinNumber(pinNumber);
@@ -164,15 +141,10 @@ namespace Iot.Device.Gpio.Drivers
             uint* dataPointer = (uint*)(_gpioPointers[unmapped.GpioNumber] + 0x0050);
             uint dataValue = *dataPointer;
 
-            return Convert.ToBoolean((dataValue >> (unmapped.Port * 8 + unmapped.PortNumber)) & 1) ? PinValue.High : PinValue.Low;
+            return Convert.ToBoolean((dataValue >> (unmapped.Port * 8 + unmapped.PortNumber)) & 0b1) ? PinValue.High : PinValue.Low;
         }
 
-        /// <summary>
-        /// Adds a handler for a pin value changed event.
-        /// </summary>
-        /// <param name="pinNumber">The pin number in the driver's logical numbering scheme.</param>
-        /// <param name="eventTypes">The event types to wait for.</param>
-        /// <param name="callback">Delegate that defines the structure for callbacks when a pin value changed event occurs.</param>
+        /// <inheritdoc/>
         protected override void AddCallbackForPinValueChangedEvent(int pinNumber, PinEventTypes eventTypes, PinChangeEventHandler callback)
         {
             if (!_pinModes.ContainsKey(pinNumber))
@@ -193,11 +165,7 @@ namespace Iot.Device.Gpio.Drivers
             base.AddCallbackForPinValueChangedEvent(pinNumber, eventTypes, callback);
         }
 
-        /// <summary>
-        /// Removes a handler for a pin value changed event.
-        /// </summary>
-        /// <param name="pinNumber">The pin number in the driver's logical numbering scheme.</param>
-        /// <param name="callback">Delegate that defines the structure for callbacks when a pin value changed event occurs.</param>
+        /// <inheritdoc/>
         protected override void RemoveCallbackForPinValueChangedEvent(int pinNumber, PinChangeEventHandler callback)
         {
             if (!_pinModes.ContainsKey(pinNumber))
@@ -211,13 +179,7 @@ namespace Iot.Device.Gpio.Drivers
             base.RemoveCallbackForPinValueChangedEvent(pinNumber, callback);
         }
 
-        /// <summary>
-        /// Blocks execution until an event of type eventType is received or a cancellation is requested.
-        /// </summary>
-        /// <param name="pinNumber">The pin number in the driver's logical numbering scheme.</param>
-        /// <param name="eventTypes">The event types to wait for.</param>
-        /// <param name="cancellationToken">The cancellation token of when the operation should stop waiting for an event.</param>
-        /// <returns>A structure that contains the result of the waiting operation.</returns>
+        /// <inheritdoc/>
         protected override WaitForEventResult WaitForEvent(int pinNumber, PinEventTypes eventTypes, CancellationToken cancellationToken)
         {
             if (!_pinModes.ContainsKey(pinNumber))
@@ -231,13 +193,7 @@ namespace Iot.Device.Gpio.Drivers
             return base.WaitForEvent(pinNumber, eventTypes, cancellationToken);
         }
 
-        /// <summary>
-        /// Async call until an event of type eventType is received or a cancellation is requested.
-        /// </summary>
-        /// <param name="pinNumber">The pin number in the driver's logical numbering scheme.</param>
-        /// <param name="eventTypes">The event types to wait for.</param>
-        /// <param name="cancellationToken">The cancellation token of when the operation should stop waiting for an event.</param>
-        /// <returns>A task representing the operation of getting the structure that contains the result of the waiting operation</returns>
+        /// <inheritdoc/>
         protected override ValueTask<WaitForEventResult> WaitForEventAsync(int pinNumber, PinEventTypes eventTypes, CancellationToken cancellationToken)
         {
             if (!_pinModes.ContainsKey(pinNumber))
@@ -251,12 +207,7 @@ namespace Iot.Device.Gpio.Drivers
             return base.WaitForEventAsync(pinNumber, eventTypes, cancellationToken);
         }
 
-        /// <summary>
-        /// Checks if a pin supports a specific mode.
-        /// </summary>
-        /// <param name="pinNumber">The pin number in the driver's logical numbering scheme.</param>
-        /// <param name="mode">The mode to check.</param>
-        /// <returns>The status if the pin supports the mode.</returns>
+        /// <inheritdoc/>
         protected override bool IsPinModeSupported(int pinNumber, PinMode mode)
         {
             return mode switch
@@ -266,11 +217,7 @@ namespace Iot.Device.Gpio.Drivers
             };
         }
 
-        /// <summary>
-        /// Gets the mode of a pin.
-        /// </summary>
-        /// <param name="pinNumber">The pin number in the driver's logical numbering scheme.</param>
-        /// <returns>The mode of the pin.</returns>
+        /// <inheritdoc/>
         protected override PinMode GetPinMode(int pinNumber)
         {
             if (!_pinModes.ContainsKey(pinNumber))
