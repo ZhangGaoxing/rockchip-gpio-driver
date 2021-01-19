@@ -25,7 +25,7 @@ namespace Iot.Device.Gpio.Drivers
     {
         protected const string GpioMemoryFilePath = "/dev/mem";
         protected IDictionary<int, PinState> _pinModes = new Dictionary<int, PinState>();
-        protected readonly int _mapMask = Environment.SystemPageSize - 1;
+        protected static readonly int _mapMask = Environment.SystemPageSize - 1;
         protected static readonly object s_initializationLock = new object();
 
         protected IntPtr[] _gpioPointers = Array.Empty<IntPtr>();
@@ -147,18 +147,6 @@ namespace Iot.Device.Gpio.Drivers
         /// <inheritdoc/>
         protected override void AddCallbackForPinValueChangedEvent(int pinNumber, PinEventTypes eventTypes, PinChangeEventHandler callback)
         {
-            if (!_pinModes.ContainsKey(pinNumber))
-            {
-                throw new InvalidOperationException("Can not add a handler to a pin that is not open.");
-            }
-            else
-            {
-                if (_pinModes[pinNumber].CurrentPinMode == PinMode.Output)
-                {
-                    throw new InvalidOperationException("Can not add a handler to a pin that is output mode.");
-                }
-            }
-
             _pinModes[pinNumber].InUseByInterruptDriver = true;
 
             base.OpenPin(pinNumber);
@@ -168,11 +156,6 @@ namespace Iot.Device.Gpio.Drivers
         /// <inheritdoc/>
         protected override void RemoveCallbackForPinValueChangedEvent(int pinNumber, PinChangeEventHandler callback)
         {
-            if (!_pinModes.ContainsKey(pinNumber))
-            {
-                throw new InvalidOperationException("Can not add a handler to a pin that is not open.");
-            }
-
             _pinModes[pinNumber].InUseByInterruptDriver = false;
 
             base.OpenPin(pinNumber);
@@ -182,11 +165,6 @@ namespace Iot.Device.Gpio.Drivers
         /// <inheritdoc/>
         protected override WaitForEventResult WaitForEvent(int pinNumber, PinEventTypes eventTypes, CancellationToken cancellationToken)
         {
-            if (!_pinModes.ContainsKey(pinNumber))
-            {
-                throw new InvalidOperationException("Can not add a block execution to a pin that is not open.");
-            }
-
             _pinModes[pinNumber].InUseByInterruptDriver = true;
 
             base.OpenPin(pinNumber);
@@ -196,11 +174,6 @@ namespace Iot.Device.Gpio.Drivers
         /// <inheritdoc/>
         protected override ValueTask<WaitForEventResult> WaitForEventAsync(int pinNumber, PinEventTypes eventTypes, CancellationToken cancellationToken)
         {
-            if (!_pinModes.ContainsKey(pinNumber))
-            {
-                throw new InvalidOperationException("Can not async call to a pin that is not open.");
-            }
-
             _pinModes[pinNumber].InUseByInterruptDriver = true;
 
             base.OpenPin(pinNumber);
@@ -220,11 +193,6 @@ namespace Iot.Device.Gpio.Drivers
         /// <inheritdoc/>
         protected override PinMode GetPinMode(int pinNumber)
         {
-            if (!_pinModes.ContainsKey(pinNumber))
-            {
-                throw new InvalidOperationException("Can not get a pin mode of a pin that is not open.");
-            }
-
             return _pinModes[pinNumber].CurrentPinMode;
         }
 
@@ -264,7 +232,7 @@ namespace Iot.Device.Gpio.Drivers
                 {
                     IntPtr map = Interop.mmap(IntPtr.Zero, Environment.SystemPageSize * 16, MemoryMappedProtections.PROT_READ | MemoryMappedProtections.PROT_WRITE, MemoryMappedFlags.MAP_SHARED, fileDescriptor, (int)(GpioRegisterAddresses[i] & ~_mapMask));
 
-                    if (map.ToInt64() < 0)
+                    if (map.ToInt64() == -1)
                     {
                         Interop.munmap(map, 0);
                         throw new IOException($"Error {Marshal.GetLastWin32Error()} initializing the Gpio driver (GPIO{i} initialize error).");

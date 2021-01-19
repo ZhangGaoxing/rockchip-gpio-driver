@@ -1,12 +1,11 @@
-﻿using System;
-using System.Collections.Generic;
+﻿// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+// See the LICENSE file in the project root for more information.
+
+using System;
 using System.Device.Gpio;
 using System.IO;
-using System.Linq;
 using System.Runtime.InteropServices;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace Iot.Device.Gpio.Drivers
 {
@@ -15,22 +14,6 @@ namespace Iot.Device.Gpio.Drivers
     /// </summary>
     public unsafe class Rk3328Driver : RockchipDriver
     {
-        /// <inheritdoc/>
-        protected override uint[] GpioRegisterAddresses =>
-            new[] { 0xFF21_0000, 0xFF22_0000, 0xFF23_0000, 0xFF24_8000 };
-
-        /// <summary>
-        /// General Register Files (GRF).
-        /// </summary>
-        protected uint GeneralRegisterFiles => 0xFF10_0000;
-
-        /// <summary>
-        /// Clock and Reset Unit (CRU).
-        /// </summary>
-        protected uint ClockResetUnit => 0xFF44_0000;
-
-        private IntPtr _grfPointer = IntPtr.Zero;
-        private IntPtr _cruPointer = IntPtr.Zero;
         private static readonly int[] _grfOffsets = new[]
         {
             0x0100, 0x0104, 0x0108, 0x010C,  // GPIO0 PU/PD control
@@ -48,6 +31,23 @@ namespace Iot.Device.Gpio.Drivers
             // 3AL  3AH     3BL     3BH     3C          3D
             0x0038, 0x003C, 0x0040, 0x0044, 0x0048, -1, 0x004C, -1  // GPIO3 iomux control
         };
+
+        private IntPtr _grfPointer = IntPtr.Zero;
+        private IntPtr _cruPointer = IntPtr.Zero;
+
+        /// <inheritdoc/>
+        protected override uint[] GpioRegisterAddresses =>
+            new[] { 0xFF21_0000, 0xFF22_0000, 0xFF23_0000, 0xFF24_8000 };
+
+        /// <summary>
+        /// General Register Files (GRF) address.
+        /// </summary>
+        protected uint GeneralRegisterFiles => 0xFF10_0000;
+
+        /// <summary>
+        /// Clock and Reset Unit (CRU) address.
+        /// </summary>
+        protected uint ClockResetUnit => 0xFF44_0000;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="Rk3328Driver"/> class.
@@ -232,13 +232,13 @@ namespace Iot.Device.Gpio.Drivers
                 IntPtr grfMap = Interop.mmap(IntPtr.Zero, Environment.SystemPageSize * 16, MemoryMappedProtections.PROT_READ | MemoryMappedProtections.PROT_WRITE, MemoryMappedFlags.MAP_SHARED, fileDescriptor, (int)(GeneralRegisterFiles & ~_mapMask));
                 IntPtr cruMap = Interop.mmap(IntPtr.Zero, Environment.SystemPageSize * 16, MemoryMappedProtections.PROT_READ | MemoryMappedProtections.PROT_WRITE, MemoryMappedFlags.MAP_SHARED, fileDescriptor, (int)(ClockResetUnit & ~_mapMask));
 
-                if (grfMap.ToInt64() < 0)
+                if (grfMap.ToInt64() == -1)
                 {
                     Interop.munmap(grfMap, 0);
                     throw new IOException($"Error {Marshal.GetLastWin32Error()} initializing the Gpio driver (GRF initialize error).");
                 }
 
-                if (cruMap.ToInt64() < 0)
+                if (cruMap.ToInt64() == -1)
                 {
                     Interop.munmap(cruMap, 0);
                     throw new IOException($"Error {Marshal.GetLastWin32Error()} initializing the Gpio driver (CRU initialize error).");

@@ -15,7 +15,7 @@ namespace Iot.Device.Gpio.Drivers
     /// </remarks>
     public class OrangePi4 : Rk3399Driver
     {
-        public static readonly int[] _pinNumberConverter = new int[]
+        private static readonly int[] _pinNumberConverter = new int[]
         {
             -1, -1, -1,  MapPinNumber(2, 'A', 0), -1, MapPinNumber(2, 'A', 1), -1, MapPinNumber(4, 'C', 6),
             MapPinNumber(4, 'C', 1), -1, MapPinNumber(4, 'C', 0), MapPinNumber(1, 'A', 1),
