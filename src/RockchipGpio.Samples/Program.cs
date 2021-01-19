@@ -2,10 +2,10 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
+using Iot.Device.BoardLed;
 using Iot.Device.Gpio.Drivers;
 using System;
 using System.Device.Gpio;
-using System.Threading;
 
 namespace RockchipGpio.Samples
 {
@@ -13,37 +13,59 @@ namespace RockchipGpio.Samples
     {
         static void Main(string[] args)
         {
-            using GpioController controller = new GpioController(PinNumberingScheme.Board, new NanoPiR2S());
+            // Set debounce delay to 5ms
+            int debounceDelay = 50000;
+            int pin = 7;
 
-            foreach (var item in NanoPiR2S._pinNumberConverter)
+            Console.WriteLine($"Let's blink an on-board LED!");
+
+            using GpioController controller = new GpioController(PinNumberingScheme.Board, new OrangePi4());
+            using BoardLed led = new BoardLed("status_led");
+
+            controller.OpenPin(pin, PinMode.InputPullUp);
+            led.Trigger = "none";
+            Console.WriteLine($"GPIO pin enabled for use: {pin}.");
+            Console.WriteLine("Press any key to exit.");
+
+            while (!Console.KeyAvailable)
             {
-                if (item == -1)
+                if (Debounce())
                 {
-                    continue;
+                    // Button is pressed
+                    led.Brightness = 1;
                 }
+                else
+                {
+                    // Button is unpressed
+                    led.Brightness = 0;
+                }
+            }
 
-                Console.WriteLine(item);
-                int i = Array.IndexOf(NanoPiR2S._pinNumberConverter, item);
+            bool Debounce()
+            {
+                long debounceTick = DateTime.Now.Ticks;
+                PinValue buttonState = controller.Read(pin);
 
-                controller.OpenPin(i);
-                Console.WriteLine(controller.Read(i));
-                Thread.Sleep(200);
-                controller.SetPinMode(i, PinMode.InputPullUp);
-                Console.WriteLine(controller.Read(i));
-                Thread.Sleep(200);
-                controller.SetPinMode(i, PinMode.InputPullDown);
-                Console.WriteLine(controller.Read(i));
-                Thread.Sleep(200);
+                do
+                {
+                    PinValue currentState = controller.Read(pin);
 
-                //controller.OpenPin(i, PinMode.Output);
-                //controller.Write(i, 0);
-                //Console.WriteLine(controller.Read(i));
-                //Thread.Sleep(200);
-                //controller.Write(i, 1);
-                //Console.WriteLine(controller.Read(i));
-                //Thread.Sleep(200);
+                    if (currentState != buttonState)
+                    {
+                        debounceTick = DateTime.Now.Ticks;
+                        buttonState = currentState;
+                    }
+                }
+                while (DateTime.Now.Ticks - debounceTick < debounceDelay);
 
-                controller.ClosePin(i);
+                if (buttonState == PinValue.Low)
+                {
+                    return true;
+                }
+                else
+                {
+                    return false;
+                }
             }
         }
     }

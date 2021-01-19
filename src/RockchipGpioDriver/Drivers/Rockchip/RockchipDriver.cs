@@ -261,6 +261,11 @@ namespace Iot.Device.Gpio.Drivers
                 portNumber;
         }
 
+        /// <summary>
+        /// Unmap pin number in the driver's logical numbering scheme to pin number with port name.
+        /// </summary>
+        /// <param name="pinNumber">Pin number in the driver's logical numbering scheme.</param>
+        /// <returns>Pin number with port name.</returns>
         protected (int GpioNumber, int Port, int PortNumber) UnmapPinNumber(int pinNumber)
         {
             int portNumber = pinNumber % 8;
