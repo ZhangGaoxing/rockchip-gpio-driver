@@ -13,7 +13,7 @@ namespace Iot.Device.Gpio.Drivers
     /// <remarks>
     /// SoC: Rockchip RK3328
     /// </remarks>
-    public class NanoPiR2S : Rk3328Driver
+    public class NanoPiR2sDriver : Rk3328Driver
     {
         private static readonly int[] _pinNumberConverter = new int[]
         {
