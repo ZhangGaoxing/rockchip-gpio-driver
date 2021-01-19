@@ -19,7 +19,7 @@ namespace RockchipGpio.Samples
 
             Console.WriteLine($"Let's blink an on-board LED!");
 
-            using GpioController controller = new GpioController(PinNumberingScheme.Board, new OrangePi4());
+            using GpioController controller = new GpioController(PinNumberingScheme.Board, new OrangePi4Driver());
             using BoardLed led = new BoardLed("status_led");
 
             controller.OpenPin(pin, PinMode.InputPullUp);
