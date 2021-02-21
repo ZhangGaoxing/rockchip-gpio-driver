@@ -7,6 +7,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "RockchipGpioDriver", "Rockc
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "RockchipGpio.Samples", "RockchipGpio.Samples\RockchipGpio.Samples.csproj", "{3BDCB268-235F-415B-88DF-D69F8FFB1CC4}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RockchipGpioDriver.GpioSpeed", "RockchipGpioDriver.GpioSpeed\RockchipGpioDriver.GpioSpeed.csproj", "{3D34A791-B09C-44D2-BBE7-465B94A5FBF6}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -21,6 +23,10 @@ Global
 		{3BDCB268-235F-415B-88DF-D69F8FFB1CC4}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{3BDCB268-235F-415B-88DF-D69F8FFB1CC4}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{3BDCB268-235F-415B-88DF-D69F8FFB1CC4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3D34A791-B09C-44D2-BBE7-465B94A5FBF6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3D34A791-B09C-44D2-BBE7-465B94A5FBF6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3D34A791-B09C-44D2-BBE7-465B94A5FBF6}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3D34A791-B09C-44D2-BBE7-465B94A5FBF6}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

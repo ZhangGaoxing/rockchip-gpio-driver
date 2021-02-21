@@ -32,6 +32,16 @@ gpio.SetPinMode(7, PinMode.Output);
 gpio.Write(7, PinValue.High);
 ```
 
+## Benchmark
+
+Benchmarking with Orange Pi 4. The operating system is Armbian, Linux kernel version is 5.10.16, and .NET version is 5.0.3. The test uses different GPIO drivers to quickly switch the state of GPIO 150 (Logical), and uses an oscilloscope to measure the average frequency of GPIO externally.
+
+| Drivers | Library Version | Average Frequency |  |
+| :-: | :-: | :-: | :-: |
+| RockchipDrivers | - | 426 KHz | <img src="imgs/rockchip.jpg" height="100"/> |
+| SysFsDrivers | System.Device.Gpio 1.3.0 | 3.99 KHz | <img src="imgs/sysfs.jpg" height="100"/> |
+| LibGpiodDrivers | System.Device.Gpio 1.3.0 <br/> libgpiod 1.2-3 | Unable to test due to segment fault | - |
+
 ## Adding new drivers
 
 ### For SoCs
@@ -98,7 +108,7 @@ Rockchip open source documents: http://opensource.rock-chips.com/wiki_Main_Page
 
 ### Circuit
 
-![](opi_circuit.png)
+![](imgs/opi_circuit.png)
 
 * Switch 1 - Board Pin7
 * Switch 2 - GND
