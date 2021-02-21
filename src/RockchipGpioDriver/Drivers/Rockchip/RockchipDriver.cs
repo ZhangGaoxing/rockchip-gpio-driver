@@ -202,6 +202,7 @@ namespace Iot.Device.Gpio.Drivers
             {
                 Interop.munmap(pointer, 0);
             }
+
             Array.Clear(_gpioPointers, 0, _gpioPointers.Length);
         }
 
