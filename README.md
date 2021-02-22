@@ -34,13 +34,13 @@ gpio.Write(7, PinValue.High);
 
 ## Benchmark
 
-Benchmarking with Orange Pi 4. The operating system is Armbian bullseye, Linux kernel version is 4.4.213, and .NET version is 5.0.3. The test uses different GPIO drivers to quickly switch the state of GPIO 150 (Logical), and uses an oscilloscope to measure the average frequency of GPIO externally.
+Benchmarking with Orange Pi 4. The operating system is Armbian buster, Linux kernel version is 5.10.16, and .NET version is 5.0.3. The test uses different GPIO drivers to quickly switch the state of GPIO 150 (Logical), and uses an oscilloscope to measure the average frequency of GPIO externally.
 
 | Drivers| Language | Library Version | Average Frequency |  |
 | :-: | :-: | :-: | :-: | :-: |
 | RockchipDriver | C# | - | 516 KHz | <img src="imgs/rockchip.jpg" height="120"/> |
 | SysFsDriver | C# | System.Device.Gpio 1.3.0 | 4.27 KHz | <img src="imgs/sysfs.jpg" height="120"/> |
-| LibGpiodDriver | C# | System.Device.Gpio 1.3.0 <br/> libgpiod 1.6.2-1 | Unable to test due to segment fault | - |
+| LibGpiodDriver | C# | System.Device.Gpio 1.3.0 <br/> libgpiod 1.2-3 | 174 KHz | <img src="imgs/libgpiod.jpg" height="120"/> |
 | [wiringOP](https://github.com/orangepi-xunlong/wiringOP) | C | 35de015 | 584 KHz | <img src="imgs/wiringOP.jpg" height="120"/> |
 
 ## Adding new drivers
