@@ -4,6 +4,19 @@ This project contains a **full function(PULL-UP, PULL-DOWN)** generic GPIO drive
 
 ## Getting started
 
+### Special GPIO driver: `OrangePi4Driver`
+
+```C#
+using GpioController gpio = new GpioController(PinNumberingScheme.Board, new OrangePi4Driver());
+
+// Open the GPIO pin.
+gpio.OpenPin(7);
+// Set the pin mode.
+gpio.SetPinMode(7, PinMode.Output);
+// Write a value to the pin.
+gpio.Write(7, PinValue.High);
+```
+
 ### Generic GPIO driver: `RockchipDriver`
 
 ```C#
@@ -13,23 +26,10 @@ using GpioController gpio = new GpioController(PinNumberingScheme.Logical, new R
 
 // Convert pin number to logical scheme.
 int pinNumber = RockchipDriver.MapPinNumber(gpioNumber: 4, port: 'C', portNumber: 6);
-// Open the GPIO pin.
 gpio.OpenPin(pinNumber);
-// Set the pin mode.
 gpio.SetPinMode(pinNumber, PinMode.InputPullUp);
 // Read current value of the pin.
 PinValue value = gpio.Read(pinNumber);
-```
-
-### Special GPIO driver: `OrangePi4Driver`
-
-```C#
-using GpioController gpio = new GpioController(PinNumberingScheme.Board, new OrangePi4Driver());
-
-gpio.OpenPin(7);
-gpio.SetPinMode(7, PinMode.Output);
-// Write a value to the pin.
-gpio.Write(7, PinValue.High);
 ```
 
 ## Benchmark
