@@ -1,10 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>net5;netcoreapp2.1</TargetFrameworks>
+    <TargetFrameworks>net8</TargetFrameworks>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <LangVersion>latest</LangVersion>
-    <Nullable>enable</Nullable>
+    <Nullable>disable</Nullable>
     <AssemblyName>Iot.Device.Gpio</AssemblyName>
     <RootNamespace>Iot.Device.Gpio</RootNamespace>
   </PropertyGroup>

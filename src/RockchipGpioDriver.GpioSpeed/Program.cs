@@ -9,7 +9,7 @@ namespace RockchipGpioDriver.GpioSpeed
     {
         static void Main(string[] args)
         {
-            int pin = 150;
+            int pin = 137;
             GpioController controller;
 
             Console.WriteLine("Select GPIO driver: ");
@@ -25,7 +25,7 @@ namespace RockchipGpioDriver.GpioSpeed
                     controller = new GpioController(PinNumberingScheme.Logical, new LibGpiodDriver());
                     break;
                 case "3":
-                    controller = new GpioController(PinNumberingScheme.Logical, new OrangePi4Driver());
+                    controller = new GpioController(PinNumberingScheme.Logical, new Rv1103Driver());
                     break;
                 default:
                     Console.WriteLine("Exit");
